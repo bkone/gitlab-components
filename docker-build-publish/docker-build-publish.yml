@@ -1,0 +1,56 @@
+spec:
+  inputs:
+    dockerfile_path:
+      default: "Dockerfile"
+      description: "Path to Dockerfile"
+    image_name:
+      required: true
+      description: "Name for the Docker image"
+    image_tag:
+      default: "$CI_COMMIT_SHORT_SHA"
+      description: "Tag for the Docker image"
+    nexus_url:
+      required: true
+      description: "Nexus Docker registry URL"
+    nexus_repo:
+      required: true
+      description: "Nexus Docker repository name"
+    nexus_username:
+      required: true
+      description: "Nexus username"
+    nexus_password:
+      required: true
+      description: "Nexus password"
+
+image: docker:latest
+
+stages:
+  - build
+  - publish
+
+.setup_docker: &setup_docker
+  - apk add --no-cache docker-cli
+  - echo "$[[ inputs.nexus_password ]]" | docker login -u "$[[ inputs.nexus_username ]]" --password-stdin "$[[ inputs.nexus_url ]]"
+
+build:
+  stage: build
+  script:
+    - *setup_docker
+    - if [ -f "$[[ inputs.dockerfile_path ]]" ]; then
+        docker build -t "$[[ inputs.image_name ]]:$[[ inputs.image_tag ]]" -f "$[[ inputs.dockerfile_path ]]" .;
+      else
+        echo "No Dockerfile found at $[[ inputs.dockerfile_path ]] - skipping Docker build";
+      fi
+
+publish:
+  stage: publish
+  script:
+    - *setup_docker
+    - if [ -f "$[[ inputs.dockerfile_path ]]" ]; then
+        docker tag "$[[ inputs.image_name ]]:$[[ inputs.image_tag ]]" "$[[ inputs.nexus_url ]]/$[[ inputs.nexus_repo ]]/$[[ inputs.image_name ]]:$[[ inputs.image_tag ]]";
+        docker push "$[[ inputs.nexus_url ]]/$[[ inputs.nexus_repo ]]/$[[ inputs.image_name ]]:$[[ inputs.image_tag ]]";
+      else
+        echo "No Dockerfile found - skipping Docker publish";
+      fi
+  only:
+    - tags

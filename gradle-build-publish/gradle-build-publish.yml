@@ -1,0 +1,54 @@
+spec:
+  inputs:
+    java_version:
+      default: "17"
+      description: "Java version to use"
+    gradle_version:
+      default: "8.5"
+      description: "Gradle version to use"
+    gradle_args:
+      default: ""
+      description: "Additional Gradle arguments"
+    nexus_url:
+      required: true
+      description: "Nexus repository URL"
+    nexus_repo:
+      required: true
+      description: "Nexus repository name"
+    nexus_username:
+      required: true
+      description: "Nexus username"
+    nexus_password:
+      required: true
+      description: "Nexus password"
+
+image: gradle:$[[ inputs.gradle_version ]]-jdk$[[ inputs.java_version ]]
+
+stages:
+  - build
+  - publish
+
+.setup_gradle: &setup_gradle
+  - apt-get update && apt-get install -y curl
+  - curl -sL https://github.com/shyiko/jabba/raw/master/install.sh | bash && . ~/.jabba/jabba.sh
+  - jabba install openjdk@$[[ inputs.java_version ]]
+  - export JAVA_HOME="$(jabba which --home openjdk@$[[ inputs.java_version ]])"
+  - export PATH="$JAVA_HOME/bin:$PATH"
+
+build:
+  stage: build
+  script:
+    - *setup_gradle
+    - gradle build $[[ inputs.gradle_args ]]
+
+publish:
+  stage: publish
+  script:
+    - *setup_gradle
+    - gradle publish
+      -PnexusUrl=$[[ inputs.nexus_url ]]
+      -PnexusRepo=$[[ inputs.nexus_repo ]]
+      -PnexusUsername=$[[ inputs.nexus_username ]]
+      -PnexusPassword=$[[ inputs.nexus_password ]]
+  only:
+    - tags

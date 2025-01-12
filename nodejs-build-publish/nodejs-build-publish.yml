@@ -1,0 +1,51 @@
+spec:
+  inputs:
+    node_version:
+      default: "20"
+      description: "Node.js version to use"
+    package_manager:
+      default: "npm"
+      description: "Package manager to use (npm or yarn)"
+    build_args:
+      default: ""
+      description: "Additional build arguments"
+    nexus_url:
+      required: true
+      description: "Nexus repository URL"
+    nexus_repo:
+      required: true
+      description: "Nexus repository name"
+    nexus_username:
+      required: true
+      description: "Nexus username"
+    nexus_password:
+      required: true
+      description: "Nexus password"
+
+image: node:$[[ inputs.node_version ]]
+
+stages:
+  - setup
+  - build
+  - publish
+
+.setup_node: &setup_node
+  - npm install -g npm@latest
+  - if [ "$[[ inputs.package_manager ]]" = "yarn" ]; then npm install -g yarn; fi
+
+build:
+  stage: build
+  script:
+    - *setup_node
+    - $[[ inputs.package_manager ]] install
+    - $[[ inputs.package_manager ]] run build $[[ inputs.build_args ]]
+
+publish:
+  stage: publish
+  script:
+    - *setup_node
+    - echo "//$[[ inputs.nexus_url ]]/repository/$[[ inputs.nexus_repo ]]/:_authToken=$[[ inputs.nexus_password ]]" > .npmrc
+    - echo "registry=https://$[[ inputs.nexus_url ]]/repository/$[[ inputs.nexus_repo ]]/" >> .npmrc
+    - $[[ inputs.package_manager ]] publish
+  only:
+    - tags
