@@ -1,0 +1,58 @@
+spec:
+  inputs:
+    java_version:
+      default: "17"
+      description: "Java version to use"
+    maven_version:
+      default: "3.9.5"
+      description: "Maven version to use"
+    maven_args:
+      default: ""
+      description: "Additional Maven arguments"
+    nexus_url:
+      required: true
+      description: "Nexus repository URL"
+    nexus_repo:
+      required: true
+      description: "Nexus repository name"
+    nexus_username:
+      required: true
+      description: "Nexus username"
+    nexus_password:
+      required: true
+      description: "Nexus password"
+
+image: maven:$[[ inputs.maven_version ]]-jdk-$[[ inputs.java_version ]]
+
+stages:
+  - build
+  - publish
+
+.setup_maven: &setup_maven
+  - apt-get update && apt-get install -y curl
+  - curl -sL https://github.com/shyiko/jabba/raw/master/install.sh | bash && . ~/.jabba/jabba.sh
+  - jabba install openjdk@$[[ inputs.java_version ]]
+  - export JAVA_HOME="$(jabba which --home openjdk@$[[ inputs.java_version ]])"
+  - export PATH="$JAVA_HOME/bin:$PATH"
+
+build:
+  stage: build
+  script:
+    - *setup_maven
+    - mvn install $[[ inputs.maven_args ]]
+
+publish:
+  stage: publish
+  script:
+    - *setup_maven
+    - mvn deploy:deploy-file
+      -Durl=$[[ inputs.nexus_url ]]/repository/$[[ inputs.nexus_repo ]]
+      -DrepositoryId=nexus
+      -Dfile=target/*.jar
+      -DgroupId=$CI_PROJECT_NAMESPACE
+      -DartifactId=$CI_PROJECT_NAME
+      -Dversion=$CI_COMMIT_REF_NAME
+      -Dpackaging=jar
+      -DgeneratePom=true
+  only:
+    - tags
